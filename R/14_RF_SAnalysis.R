@@ -9,26 +9,26 @@ db = db$db
 
 sensitivity_analysis_variable = function(col_name) {
   #' sensitivity analysis for a given variable
-  
+
   no3_sensitivity = terra::rast(lapply(1992:2019, function(x) {
-    
+
     predictors = compile_explanatory_variables(yr = x)
     names(predictors) = gsub(' ','_', names(predictors))
     names(predictors) = gsub('-','.', names(predictors))
-    
+
     predictors = terra::as.data.frame(predictors, xy=T, na.rm=T)
     pred_chang = predictors[[col_name]] # store predictor to change so it can be changed freely in the loop below
 
     sensitivity_out = lapply(c(0.75,0.9,0.95,1.05,1.1,1.25), function(param_change) {
       boxplot(predictors[,col_name])
-      
+
       predictors[,col_name] = pred_chang + abs(pred_chang)*(param_change-1)
       print('Starting model prediction ----------')
       pred_general_out = predict(rf_model, predictors)
       df_pred = data.frame(x=predictors$x, y=predictors$y, pred=pred_general_out$predictions)
       print('Finishing -----------')
       r_pred = terra::rast(df_pred, crs='+proj=longlat')
-      
+
       names(r_pred) = paste0(col_name, '_',x, '_', param_change)
       return(r_pred)
       rm(list=c('pred_general_out','df_pred'))
@@ -37,7 +37,7 @@ sensitivity_analysis_variable = function(col_name) {
     r_sensitivity_out = terra::rast(sensitivity_out)
     return(r_sensitivity_out)
   }))
-  
+
   return(no3_sensitivity)
 }
 
@@ -48,7 +48,7 @@ compute_individial_heuristic_SA = function(cols=c('N_sur_total_kg_ha_grid_area',
   cols=c('N_sur_total_kg_ha_grid_area')
   sapply(cols, function(col_name) {
     sa_pred = sensitivity_analysis_variable(col_name)
-    terra::writeRaster(sa_pred, paste0('./Output/NO3/rf_causality/SA_', col_name, '.tif'))  
+    terra::writeRaster(sa_pred, paste0('./Output/NO3/rf_causality/SA_', col_name, '.tif'))
   })
 }
 
@@ -59,15 +59,15 @@ cols=c('N_sur_total_kg_ha_grid_area',
 
 
 no3_sensitivity = lapply(1992:2019, function(x) {
-  
+
   predictors = compile_explanatory_variables(yr = x)
   names(predictors) = gsub(' ','_', names(predictors))
   names(predictors) = gsub('-','.', names(predictors))
-  
+
   predictors = terra::as.data.frame(predictors, xy=T, na.rm=T)
   pred_chang = sapply(cols, function(x) predictors[[x]])  # store predictor to change so it can be changed freely in the loop below
   pred_chang = as.data.frame(pred_chang); names(pred_chang) = cols
-  
+
   sensitivity_out = #lapply(c(0.75,0.9,0.95,1.05,1.1,1.25), function(param_change) {
     lapply(0, function(param_change) {
     predictors[,cols] = sapply(cols, function(x) pred_chang[,x] * param_change)
@@ -76,7 +76,7 @@ no3_sensitivity = lapply(1992:2019, function(x) {
     df_pred = data.frame(x=predictors$x, y=predictors$y, pred=pred_general_out$predictions)
     print('Finishing -----------')
     r_pred = terra::rast(df_pred, crs='+proj=longlat')
-    
+
     names(r_pred) = paste0('All_',x, '_', param_change)
     return(r_pred)
     rm(list=c('pred_general_out','df_pred'))
@@ -87,8 +87,7 @@ no3_sensitivity = lapply(1992:2019, function(x) {
   rm(list = c('predictors'))
 })
 d = terra::rast(no3_sensitivity)
-terra::writeRaster(d, paste0('./Output/NO3/rf_causality/SA_0_all.tif'))  
-// comparar com a baseline
+terra::writeRaster(d, paste0('./Output/NO3/rf_causality/SA_0_all.tif'))
 
 compute_hotspots_EU = function(r_file,
                                filename) {
@@ -97,12 +96,12 @@ compute_hotspots_EU = function(r_file,
   param_change = as.character(c(0.75,0.9,0.95,1.05,1.1,1.25))
   hotspots = data.frame(matrix(nrow=28, ncol=length(param_change)))
   names(hotspots) = param_change
-  
+
   hotspots[, param_change] = sapply(param_change, function(x) {
-    
+
     pattern = which(grepl(paste0('_',x),fn))
-    
-    if (length(pattern)!=28) { 
+
+    if (length(pattern)!=28) {
       pattern = pattern[which(substr(fn[pattern], start = nchar(fn[pattern])-nchar(x), stop = nchar(fn[pattern])) %in% paste0('_',x))]
     }
     round(terra::global(r_file[[pattern]]>=50, 'sum', na.rm=T)[,1]*(3162*3162)*0.000001/1000,1) # 1000 km2 yr-1
@@ -115,7 +114,7 @@ compute_hotspots_EU = function(r_file,
 baseline = terra::rast('./Output/NO3/rf/Model0019_new4_1961_2019.tif')
 names(baseline) = paste0('X',1961:2019)
 baseline = baseline[[which(as.numeric(gsub('X','', names(baseline)))>1991)]]
-df = data.frame(yrs=1992:2019, 
+df = data.frame(yrs=1992:2019,
                 value = terra::global(baseline>=50,'sum',na.rm=T)*(3162*3162)*0.000001/1000)
 
 SA = list.files(path = './Output/NO3/rf_causality/',pattern = 'SA_',full.names = T); fn = list.files(path = './Output/NO3/rf_causality/',pattern = 'SA_')
@@ -141,16 +140,16 @@ df_sa_eu = r_SA_t %>%
   summarize(avg=mean((f-1)*100),
             sd=sd((f-1)*100))
 View(df_sa_eu)
-  
 
-ggplot(df_sa_eu, aes(x=param, y=avg, colour=variable, group=variable)) + 
+
+ggplot(df_sa_eu, aes(x=param, y=avg, colour=variable, group=variable)) +
   geom_point(size=3, position = position_dodge(width=0.3)) +
   geom_errorbar(aes(ymin=avg-sd, ymax=avg+sd), width=.2,
-                position=position_dodge(width=0.3)) + 
+                position=position_dodge(width=0.3)) +
   scale_colour_viridis_d(option = 'H') +
   coord_flip() +
-  scale_y_continuous(limits=c(-10,15)) + 
-  labs(x='',y='Change in baseline (%)', colour='Modifier') + 
+  scale_y_continuous(limits=c(-10,15)) +
+  labs(x='',y='Change in baseline (%)', colour='Modifier') +
   theme_light() +
   theme(text = element_text(family='serif'),
         axis.title = element_text(size=17, face='bold'),
@@ -160,16 +159,16 @@ ggplot(df_sa_eu, aes(x=param, y=avg, colour=variable, group=variable)) +
         legend.text = element_text(size=13))
 ggsave(filename = './Output/Plots/RF_causality/EU_param_SA.jpeg',dpi=1000)
 
-sa_p_eu = ggplot() + 
-  geom_hline(yintercept = 1, linetype='dashed',colour='black', size = 1.1) + 
-  #geom_line(data=df, aes(x=yrs,y=sum), colour='black', size=1.1) + 
-  geom_line(data=r_SA_t, aes(x=yrs, y=f, colour=factor(variable)), size=1.1, alpha=1) + 
+sa_p_eu = ggplot() +
+  geom_hline(yintercept = 1, linetype='dashed',colour='black', size = 1.1) +
+  #geom_line(data=df, aes(x=yrs,y=sum), colour='black', size=1.1) +
+  geom_line(data=r_SA_t, aes(x=yrs, y=f, colour=factor(variable)), size=1.1, alpha=1) +
   scale_colour_viridis_d(option = 'C') +
-  facet_wrap(.~param, scales = 'free_y') + 
-  scale_y_continuous(limits=c(0.9,1.15), breaks=c(0.9,0.95,1,1.05,1.1,1.15)) + 
-  theme_bw() + 
-  labs(x='',y='Fraction relative to baseline',colour='Variation') + 
-  scale_x_continuous(breaks=c(1992,2000,2010,2019), expand=c(0,0)) + 
+  facet_wrap(.~param, scales = 'free_y') +
+  scale_y_continuous(limits=c(0.9,1.15), breaks=c(0.9,0.95,1,1.05,1.1,1.15)) +
+  theme_bw() +
+  labs(x='',y='Fraction relative to baseline',colour='Variation') +
+  scale_x_continuous(breaks=c(1992,2000,2010,2019), expand=c(0,0)) +
   theme(#legend.position = c(0.85, 0.65),
     text=element_text(size=14, family='serif'),
     axis.title = element_text(size=18, face='bold'),
@@ -201,21 +200,21 @@ baseline_df = reshape2::melt(baseline_df, 'country')
 
 prepare_SA_df = function(r_sa,
                          filename) {
-  
+
   fn = names(r_sa)
   param=as.character(c(0.75,0.9,0.95,1.05,1.1,1.25))
   sa = lapply(param, function(x) {
-    
+
     pattern = which(grepl(paste0('_',x),fn))
-    if (length(pattern)!=28) { 
+    if (length(pattern)!=28) {
       pattern = pattern[which(substr(fn[pattern], start = nchar(fn[pattern])-nchar(x), stop = nchar(fn[pattern])) %in% paste0('_',x))]
     }
     return(r_sa[[pattern]])
   })
   names(sa) = paste0('X',param)
-  
+
   sa_df = lapply(paste0('X',param), function(x) {
-    
+
     df = round(exactextractr::exact_extract(sa[[x]]>=50, eu_df, 'sum')*(3162*3162)*0.000001/1000, 2)
     df$country = eu_df$GEOUNIT
     names(df) = c(paste0('X',1992:2019), 'country')
@@ -225,10 +224,10 @@ prepare_SA_df = function(r_sa,
   })
   sa_df = data.table::rbindlist(sa_df)
   names(baseline_df)[3] = 'baseline'
-  
+
   df = plyr::join(sa_df, baseline_df)
   df$f = df$value/df$baseline
-  
+
   cntr = c('Netherlands', 'Germany', 'Romania', 'Belgium', 'Denmark','Austria','Poland',
            'Portugal','Spain','France','Italy','Czech Republic',
            'Greece','Bulgaria','Hungary','Croatia',
@@ -236,12 +235,12 @@ prepare_SA_df = function(r_sa,
   df = df[which(df$country %in% cntr),]
   df$yrs = as.numeric(gsub('X','',df$variable))
   df$fname = filename
-  
+
   df_sa_cntry = df %>%
     group_by(country, param, fname) %>%
     summarize(avg=mean((f-1)*100),
               sd=sd((f-1)*100))
-  
+
   return(list(
     sa_df = df,
     sa_df_country = df_sa_cntry
@@ -261,7 +260,7 @@ sa_links = data.frame(path=c('./Output/NO3/rf_causality/SA_nfer_crop_no3.tif',
                                'All'))
 
 sa_store = lapply(1:nrow(sa_links), function(x) {
-  
+
   sa = terra::rast(sa_links[x,'path'])
   sa = prepare_SA_df(sa, sa_links[x,'name'])
   return(sa)
@@ -285,15 +284,15 @@ d = sa_df%>%
                  max = max(f-1)*100,
                  min = min(f-1)*100)
 write.csv(d, './this.csv',row.names = F)
-ggplot(sa_df_cntry, aes(x=fname, y=avg, colour=param, group=param)) + 
+ggplot(sa_df_cntry, aes(x=fname, y=avg, colour=param, group=param)) +
   geom_point(size=1.5, position = position_dodge(width=0.8)) +
   geom_errorbar(aes(ymin=avg-sd, ymax=avg+sd), width=.2,
-                position=position_dodge(width=0.8)) + 
+                position=position_dodge(width=0.8)) +
   scale_colour_viridis_d(option = 'H') +
-  facet_wrap(.~country, scales = 'free_x') + 
+  facet_wrap(.~country, scales = 'free_x') +
   coord_flip() +
-  #scale_y_continuous(limits=c(-60,55)) + 
-  labs(x='',y='Change in baseline (%)', colour='Modifier') + 
+  #scale_y_continuous(limits=c(-60,55)) +
+  labs(x='',y='Change in baseline (%)', colour='Modifier') +
   theme_light() +
   theme(text = element_text(family='serif'),
         strip.text = element_text(size=13),
@@ -306,16 +305,16 @@ ggplot(sa_df_cntry, aes(x=fname, y=avg, colour=param, group=param)) +
 ggsave(filename = './Output/Plots/RF_causality/Country_param_SA.jpeg',dpi=1000, height = 8.5, width = 13)
 
 
- ggplot() + 
-  geom_hline(yintercept = 1, linetype='dashed',colour='black', size = 1.1) + 
-  #geom_line(data=df, aes(x=yrs,y=sum), colour='black', size=1.1) + 
-  geom_line(data=df, aes(x=yrs, y=f, colour=factor(param)), size=1.1, alpha=1) + 
+ ggplot() +
+  geom_hline(yintercept = 1, linetype='dashed',colour='black', size = 1.1) +
+  #geom_line(data=df, aes(x=yrs,y=sum), colour='black', size=1.1) +
+  geom_line(data=df, aes(x=yrs, y=f, colour=factor(param)), size=1.1, alpha=1) +
   scale_colour_viridis_d(option = 'C') +
-  facet_wrap(.~country,scales = 'fixed') + 
-  #scale_y_continuous(limits=c(0.5,1.5), breaks=c(0.9,0.95,1,1.05,1.1,1.15)) + 
-  theme_bw() + 
-  labs(x='',y='Fraction relative to baseline',colour='Variation') + 
-  scale_x_continuous(breaks=c(2000,2010,2019), expand=c(0,0)) + 
+  facet_wrap(.~country,scales = 'fixed') +
+  #scale_y_continuous(limits=c(0.5,1.5), breaks=c(0.9,0.95,1,1.05,1.1,1.15)) +
+  theme_bw() +
+  labs(x='',y='Fraction relative to baseline',colour='Variation') +
+  scale_x_continuous(breaks=c(2000,2010,2019), expand=c(0,0)) +
   theme(#legend.position = c(0.85, 0.65),
     text=element_text(size=14, family='serif'),
     axis.title = element_text(size=18, face='bold'),
@@ -333,7 +332,7 @@ ggsave(filename = './Output/Plots/RF_causality/SA_country.jpeg',dpi=1000, height
 
 # statistican analysis SA ----
 library(purrr)
-library(broom)´
+library(broom)?
 
 ## Europe ----
 
@@ -349,7 +348,7 @@ subset(eu_SA_t, variable=='0.75' & param=='All')
 params = unique(r_SA_t$param)
 
 anova_param = function() {
-  
+
   anovas = lapply(mod, function(x)   {
 
     new_df = subset(eu_SA_t, variable==x)[, c('yrs','param','value')]
@@ -357,7 +356,7 @@ anova_param = function() {
     anv = aov(value~param, data = new_df)
     head(new_df)
     ref = subset(new_df, param=='baseline')[, 'value']
-    
+
     fit = lm(ref~subset(new_df, param=='All')[,'value'])
     anv = anova(fit)
     tukey
