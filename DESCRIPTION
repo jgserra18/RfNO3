@@ -2,7 +2,7 @@ Package: RfNO3
 Title: NO3 concentrations in groundwater predictions using random forests
 Version: 0.0.0.9000
 Authors@R: 
-    person("João", "Serra", , "jserra@isa.ulisboa.pt", 
+   person("João", "Serra", email="jserra@isa.ulisboa.pt", role = c("cre", "aut"),
            comment = c(ORCID = "0000-0002-3561-5350"))
 Description: Hyper-tunes random forest model (2000-2019) to predict NO3 cocnentration in groundwater
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a

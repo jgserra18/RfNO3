@@ -8,6 +8,7 @@ The goal of RfNO3 is to store the code that hyper-tunes and predicts NO3 concent
 
 Currently not organized with no input nor output data.
 
+
 ## Installation
 
 You can install the development version of RfNO3 from [GitHub](https://github.com/) with:
